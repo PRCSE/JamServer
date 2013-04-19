@@ -26,7 +26,7 @@ public class ConnectionHandler extends Observable implements Runnable {
 	private int clientId;
 	private static int clientIdSeed = 0;
 	private String clientEmail;
-	//TODO set after login
+	private boolean admin;
 	
 	public ConnectionHandler(Socket socket, DataSource dataSource, ResourceBundle queries){
 		this.socket = socket;
@@ -62,11 +62,20 @@ public class ConnectionHandler extends Observable implements Runnable {
 					if(request instanceof CustomerInfo) {
 						if(((CustomerInfo) request).getCustomer() != null){
 							this.clientEmail = ((CustomerInfo) request).getEmail();
+							this.admin = ((CustomerInfo) request).isAdmin();
+							
+							if(clientEmail != null) {
+								System.out.print(clientEmail + " - client logged.");
+							}
+							
+							if(admin == true) {
+								System.out.print(" (Registered as Admin)\n");
+							}
 						}
 					}
 					
-					if(request.shouldBroadcast() && request.getError() == null){
-						this.notifyRequest(request); // don't like method name
+					if((request.shouldBroadcast() || request.shouldSync()) && request.getError() == null){
+						this.notifyRequest(request);
 					}
 					else {
 						output.writeObject(request);
@@ -96,27 +105,31 @@ public class ConnectionHandler extends Observable implements Runnable {
 			}
 		}
 		catch(EOFException e) {
-			// TODO Auto-generated catch block
+			// TODO check catch block
+			System.out.println("Boken pipe.");
 			e.printStackTrace();
 		}
 		catch(IOException e) {
-			// TODO Auto-generated catch block
+			// TODO check catch block
+			System.out.println("I/O failed, request rejected.");
 			e.printStackTrace();
 		} 
 		catch (ClassNotFoundException e) {
-			// TODO Auto-generated catch block
+			// TODO research this
+			System.out.println("Could not find class.");
 			e.printStackTrace();
 		} 
 		catch (SQLException e) {
-			// TODO Auto-generated catch block
+			// TODO check catch block
+			System.out.println("Error with database.");
 			e.printStackTrace();
 		} 
 		catch (InterruptedException e) {
-			// TODO Auto-generated catch block
+			// TODO check catch block
+			System.out.println("Thread interrupted.");
 			e.printStackTrace();
 		} 
 		catch (Exception e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		finally {
@@ -131,7 +144,7 @@ public class ConnectionHandler extends Observable implements Runnable {
 			}
 		}
 	}
-	
+
 	private Request nextBroadcastRequest() {
 		Request result = null;
 		synchronized(this.broadcastQueue) {
@@ -165,5 +178,13 @@ public class ConnectionHandler extends Observable implements Runnable {
 	public static int nextClientId() {
 		clientIdSeed ++;
 		return clientIdSeed;
+	}
+	
+	public int getClientId() {
+		return clientId;
+	}
+
+	public boolean isAdmin() {
+		return admin;
 	}
 }

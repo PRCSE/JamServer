@@ -38,7 +38,7 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 	@Override
 	public void connect() throws Exception {
 		// would be used for a single direct connection (now uses connection pool)
-		throw new Exception("not implemeneted");
+		throw new Exception("Single connection not supported");
 	}
 
 	@Override
@@ -79,10 +79,9 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 		while (rs.next()){
 			a = new Artist(rs.getLong("id"), 
 									rs.getString("name"), 
-									rs.getString("bio"), 
+									rs.getString("description"), 
 									rs.getString("genres"),
-									rs.getString("thumb_image"),
-									rs.getString("header_image"));
+									rs.getString("thumb_image"));
 			result.add(a);
 			artists.put(new Long(a.getId()), a);
 		}
@@ -153,7 +152,7 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 	@Override
 	public CustomerInfo login(CustomerInfo request) throws Exception {
 		
-		String query = queries.getString("customer_sql");
+		String query = queries.getString("login_sql");
 		PreparedStatement stmt = this.connection.prepareStatement(query);
 		stmt.setString(1, request.getEmail());
 		stmt.setString(2, request.getPassword());
@@ -169,19 +168,22 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 												rs.getString("surname"),
 												rs.getString("telephone"),
 												rs.getString("mobile"),
-												rs.getString("line1"),
-												rs.getString("line2"),
+												rs.getString("line_1"),
+												rs.getString("line_2"),
 												rs.getString("town"),
 												rs.getString("county"),
 												rs.getString("postcode"),
 												rs.getString("country"),
+												rs.getString("thumb_image"),
 												rs.getDate("created"),
-												false);			
+												false);		
 			
 			customer.setId(rs.getLong("customer_id"));
-			customer.getAccount().setId(rs.getLong("account_id"));
+			customer.getAccount().setId(rs.getLong("login_id"));
 			request.setCustomer(customer);
 			request.setPassword(null);
+			request.setAdmin("Admin".equals(rs.getString("permission")));
+			System.out.println("permission: " + rs.getString("permission"));
 			
 			query = queries.getString("favourites_sql");
 			PreparedStatement stmt2 = this.connection.prepareStatement(query);
@@ -218,8 +220,6 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 
 	@Override
 	public CustomerInfo syncCustomer(CustomerInfo request) throws Exception {
-		
-		// TODO also make sure to redo salt and hash for password when email changed
 		
 		String query = queries.getString("account_sql");
 		PreparedStatement stmt = this.connection.prepareStatement(query);
@@ -275,8 +275,9 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 		stmt2.setString(9, customer.getCounty());
 		stmt2.setString(10, customer.getPostcode());
 		stmt2.setString(11, customer.getCountry());
-		stmt2.setString(12, customer.createdAsString());
-		stmt2.setLong(13, customer.getAccount().getId());
+		stmt2.setString(12, customer.getThumb());
+		stmt2.setString(13, customer.createdAsString());
+		stmt2.setLong(14, customer.getAccount().getId());
 		
 		stmt2.execute();
 		rs2 = stmt2.getGeneratedKeys();
@@ -294,8 +295,20 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 
 	private void updateCustomer(Customer customer, ArrayList<Favourite> favourites) throws SQLException, Exception {
 		// run update
+		
+		// update account
 		String query = queries.getString("update_account_sql");
 		PreparedStatement stmt2 = this.connection.prepareStatement(query);
+		stmt2.setString(1, customer.getAccount().getEmail());
+		stmt2.setString(2, customer.getAccount().getToken());
+		stmt2.setLong(3, customer.getAccount().getId());
+		
+		stmt2.execute();
+		stmt2.close();
+		
+		// update customer
+		query = queries.getString("update_customer_sql");
+		stmt2 = this.connection.prepareStatement(query);
 		stmt2.setString(1, customer.getTitle());
 		stmt2.setString(2, customer.getForename());
 		stmt2.setString(3, customer.getSurname());
@@ -307,13 +320,12 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 		stmt2.setString(9, customer.getCounty());
 		stmt2.setString(10, customer.getPostcode());
 		stmt2.setString(11, customer.getCountry());
-		stmt2.setString(12, customer.getAccount().getEmail());
-		stmt2.setString(13, customer.getAccount().getToken());
-		stmt2.setLong(14, customer.getAccount().getId());
-		
+		stmt2.setString(12, customer.getThumb());
+		stmt2.setLong(13, customer.getAccount().getId());
 		
 		stmt2.execute();
 		stmt2.close();
+		
 		
 		// make a copy of the current db favourites
 		ArrayList<Favourite> dbFavourites = new ArrayList<Favourite>();

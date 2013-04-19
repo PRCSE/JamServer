@@ -25,22 +25,38 @@ public class JamServer {
 	private ServerSocket servSock;
 	private DataSource dataSource;
 	private ResourceBundle queries;
-	private String mysqlUrl = "jdbc:mysql://127.0.0.1:8889/test";
+	private String mysqlUrl = "jdbc:mysql://localhost:8889/test";
 	private String oracleUrl = "jdbc:oracle:thin:@larry.uopnet.plymouth.ac.uk:1521:orcl";
 	private final int PORT = 1234;
 	private ArrayList handlers;
+	private static final int LARRY = 1;
+	private static final int MYSQL = 2;
+	
+	//== Change using variable based on database source ==//
+	private int using = LARRY;
 
 	public JamServer() {
 		handlers = new ArrayList();
 		
-		// comment out method based on which database source you want to use
-		connectMySQL();
-//		try {
-//			connectOracle();
-//		} catch (SQLException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
+		// switch case to use specific data source (to extensible for alternate sources)
+		switch(using) {
+			case LARRY:
+				// for Larry, Plymouth Oracle database
+				try {
+					connectOracle();
+				} catch (SQLException e) {
+					// TODO check catch block
+					System.out.println("Failed to connect to Oracle server.\n");
+					e.printStackTrace();
+				}
+				break;
+			case MYSQL:
+				// for local MySQL database
+				connectMySQL();
+				break;
+		}
+		
+		
 	}
 
 	private void connectMySQL() {
@@ -73,11 +89,12 @@ public class JamServer {
 			System.out.println("Unable to attach to port");
 			System.exit(1);
 		}
+		
+		System.out.println("Server ready.\n");
 		do {
 			handleClient();
 		}
 		while (true);
-		//TODO check rest of while true loop structure
 	}
 
 	private void handleClient() {
@@ -100,11 +117,13 @@ public class JamServer {
 			System.out.println("Client connected.");
 		}
 		catch(EOFException e) {
-			// TODO Auto-generated catch block
+			// TODO check catch block
+			System.out.println("Pipe broken.\n");
 			e.printStackTrace();
 		}
 		catch(IOException e) {
-			// TODO Auto-generated catch block
+			// TODO check catch block
+			System.out.println("I/O failed, request rejected\n");
 			e.printStackTrace();
 		}
 	}
@@ -121,7 +140,20 @@ public class JamServer {
 	public synchronized void broadcastRequest(Request request){
 		for(Iterator i = handlers.iterator(); i.hasNext();){
 			ConnectionHandler handler = (ConnectionHandler)i.next();
-			handler.addBroadcastRequest(request);
+			
+			if(request.shouldBroadcast()) {
+				handler.addBroadcastRequest(request);
+				continue;
+			}
+			
+			if(request.shouldSync() && request.getClientId() == handler.getClientId()) {
+				handler.addBroadcastRequest(request);
+				continue;
+			}
+			
+			if(handler.isAdmin()) {
+				handler.addBroadcastRequest(request);
+			}
 		}
 	}
 	
