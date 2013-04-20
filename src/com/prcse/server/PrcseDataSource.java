@@ -20,6 +20,7 @@ import com.prcse.datamodel.Favourite;
 import com.prcse.datamodel.SeatingPlan;
 import com.prcse.datamodel.Tour;
 import com.prcse.datamodel.Venue;
+import com.prcse.protocol.CustomerForm;
 import com.prcse.protocol.CustomerInfo;
 import com.prcse.utils.PrcseSource;
 
@@ -183,7 +184,9 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 			request.setCustomer(customer);
 			request.setPassword(null);
 			request.setAdmin("Admin".equals(rs.getString("permission")));
-			System.out.println("permission: " + rs.getString("permission"));
+			
+			// for debug
+			//System.out.println("permission: " + rs.getString("permission"));
 			
 			query = queries.getString("favourites_sql");
 			PreparedStatement stmt2 = this.connection.prepareStatement(query);
@@ -404,5 +407,42 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 			stmt2.execute();
 			stmt2.close();
 		}
+	}
+
+	@Override
+	public CustomerForm getCustomerFormData(CustomerForm request) throws Exception {
+		ArrayList<String> titles = new ArrayList<String>();
+		ArrayList<String> countries = new ArrayList<String>();
+		
+		String query = queries.getString("title_sql");
+		PreparedStatement stmt = this.connection.prepareStatement(query);
+		
+		ResultSet rs = stmt.executeQuery();
+		
+		while(rs.next()) {
+			titles.add(rs.getString("name"));
+		}
+		
+		rs.close();
+		stmt.close();
+		
+		query = queries.getString("country_sql");
+		stmt = this.connection.prepareStatement(query);
+		
+		rs = stmt.executeQuery();
+		
+		while(rs.next()) {
+			countries.add(rs.getString("name"));
+		}
+		
+		rs.close();
+		stmt.close();
+		
+		if(titles.size() > 1 || countries.size() > 1) {
+			CustomerForm dbGen = new CustomerForm(titles, countries);
+			request = dbGen;
+		}
+		
+		return request;
 	}
 }

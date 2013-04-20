@@ -33,7 +33,7 @@ public class JamServer {
 	private static final int MYSQL = 2;
 	
 	//== Change using variable based on database source ==//
-	private int using = LARRY;
+	private int using = MYSQL;
 
 	public JamServer() {
 		handlers = new ArrayList();
