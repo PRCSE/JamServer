@@ -17,9 +17,12 @@ import com.prcse.datamodel.Billing;
 import com.prcse.datamodel.Customer;
 import com.prcse.datamodel.Event;
 import com.prcse.datamodel.Favourite;
+import com.prcse.datamodel.SeatingArea;
 import com.prcse.datamodel.SeatingPlan;
 import com.prcse.datamodel.Tour;
 import com.prcse.datamodel.Venue;
+import com.prcse.protocol.AvailableSeats;
+import com.prcse.protocol.CustomerBooking;
 import com.prcse.protocol.CustomerForm;
 import com.prcse.protocol.CustomerInfo;
 import com.prcse.utils.PrcseSource;
@@ -99,7 +102,10 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 			Venue v = venues.get(new Long(rs.getLong("venue_id")));
 			if(v == null) {
 				v = new Venue(rs.getLong("venue_id"), 
-								rs.getString("venue_name"));
+								rs.getString("venue_name"),
+								rs.getString("thumb_image"),
+								rs.getString("postcode"),
+								rs.getString("description"));
 				venues.put(new Long(v.getId()), v);
 			}
 			
@@ -132,6 +138,7 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 									a);
 					tours.put(new Long(t.getId()), t);
 					a.addTour(t);
+					e.setTourName(t.getName());
 				}
 			}
 			
@@ -245,8 +252,9 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 
 	private void insertCustomer(Customer customer) throws SQLException, Exception {
 		// run insert
+		String cols[] = {"ID"};
 		String query = queries.getString("insert_account_sql");
-		PreparedStatement stmt2 = this.connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+		PreparedStatement stmt2 = this.connection.prepareStatement(query, cols);
 		stmt2.setString(1, customer.getAccount().getEmail());
 		stmt2.setString(2, customer.getAccount().getToken());
 		stmt2.setString(3, null);
@@ -266,7 +274,7 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 		stmt2.close();
 		
 		query = queries.getString("insert_customer_sql");
-		stmt2 = this.connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+		stmt2 = this.connection.prepareStatement(query, cols);
 		stmt2.setString(1, customer.getTitle());
 		stmt2.setString(2, customer.getForename());
 		stmt2.setString(3, customer.getSurname());
@@ -285,7 +293,7 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 		stmt2.execute();
 		rs2 = stmt2.getGeneratedKeys();
 		if (rs2.next()){
-			customer.setId(rs2.getLong(1));
+			customer.setId(Long.parseLong(rs2.getString(1)));
 		}
 		else {
 			throw new Exception("Failed to create customer. Please try again.");
@@ -352,10 +360,11 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 		//compare current to new favourites
 		
 		//if not in db (id = 0) insert
+		String cols[] = {"ID"};
 		for(int i=0; i < favourites.size(); i++) {
 			if(favourites.get(i).getId() == 0) {
 				query = queries.getString("insert_favourites_sql");
-				stmt2 = this.connection.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+				stmt2 = this.connection.prepareStatement(query, cols);
 				stmt2.setLong(1, customer.getId());
 				stmt2.setLong(2, favourites.get(i).getArtistId());
 				stmt2.setLong(3, favourites.get(i).getEventId());
@@ -442,6 +451,130 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 			CustomerForm dbGen = new CustomerForm(titles, countries);
 			request = dbGen;
 		}
+		
+		return request;
+	}
+
+	@Override
+	public CustomerBooking createBooking(CustomerBooking request) throws Exception {
+		// run insert
+		String cols[] = {"ID"};
+		String query = queries.getString("insert_booking_sql");
+		PreparedStatement stmt = this.connection.prepareStatement(query, cols);
+		stmt.setString(1, request.getCreatedAsString());
+		stmt.setLong(2, request.getCustomerId());
+		stmt.setLong(3, request.getBooking().getEvent().getId());
+		
+		// execute and set booking id
+		stmt.execute();
+		ResultSet rs = stmt.getGeneratedKeys();
+		if (rs.next()){
+			request.getBooking().setId(rs.getLong(1));
+		}
+		else {
+			throw new Exception("Failed to create booking. Please try again.");
+		}
+		
+		// close commit
+		rs.close();
+		stmt.close();
+		
+		if(request.getBooking().getId() > 0) {
+			for(long i : request.getSeatIds()) {
+				query = queries.getString("insert_booking_seat_sql");
+				stmt = this.connection.prepareStatement(query, cols);
+				stmt.setLong(1, request.getBooking().getId());
+				stmt.setLong(2, i);
+				
+				// execute
+				stmt.execute();
+				
+				// close commit
+				rs.close();
+				stmt.close();
+			}
+		}
+		
+		return request;
+	}
+
+	@Override
+	public CustomerBooking cancelBooking(CustomerBooking request) throws Exception {
+		// run update
+		String query = queries.getString("cancel_booking_sql");
+		PreparedStatement stmt = this.connection.prepareStatement(query);
+		stmt.setString(1, request.getCancelledAsString());
+		stmt.setLong(2, request.getCustomerId());
+		stmt.setLong(3, request.getBooking().getId());
+		
+		// execute
+		stmt.execute();
+		stmt.close();
+		
+		if(request.getBooking().getId() > 0) {
+			for(long i : request.getSeatIds()) {
+				query = queries.getString("clear_booking_seat_sql");
+				stmt = this.connection.prepareStatement(query);
+				stmt.setLong(1, request.getBooking().getId());
+				
+				// execute
+				stmt.execute();
+				stmt.close();
+				
+				request.getSeatIds().remove(i);
+			}
+		}
+		
+		return request;
+	}
+
+	@Override
+	public ArrayList<HashMap> getEventSeatingMap(long eventId) {
+		// TODO first layer of sql requests for drawn seating areas
+		// get first tier of seating area where event id is eventId
+		// for each result getSeatingAreaMap();
+		return null;
+	}
+	
+	protected HashMap getSeatingAreaMap(long seatingAreaId) {
+		// TODO after first query execution perform recursive searches for child seating areas
+		return null;
+	}
+
+	@Override
+	public AvailableSeats getEventAvailability(AvailableSeats request) throws Exception {
+		String query = queries.getString("event_seats_sql");
+		PreparedStatement stmt = this.connection.prepareStatement(query);
+		stmt.setLong(1, request.getEvent().getId());
+		
+		ResultSet rs = stmt.executeQuery();
+		
+		// set results into request.addseats
+		while(rs.next()) {
+			SeatingArea area = new SeatingArea(rs.getString("name"),
+												rs.getInt("available"),
+												rs.getLong("parent"),
+												rs.getLong("plan"));
+			area.setId(rs.getLong("id"));
+			request.addSeat(area);
+		}
+		
+		rs.close();
+		stmt.close();
+		
+		query = queries.getString("event_available_sql");
+		stmt = this.connection.prepareStatement(query);
+		stmt.setLong(1, request.getEvent().getId());
+		
+		rs = stmt.executeQuery();
+		
+		// get total seats from result set
+		if(rs.next()) {
+			request.setTotal((int)rs.getLong("available"));
+		}
+		
+		rs.close();
+		stmt.close();
 		
 		return request;
 	}

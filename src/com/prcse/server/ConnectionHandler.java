@@ -59,7 +59,7 @@ public class ConnectionHandler extends Observable implements Runnable {
 					request.handleRequest(objectSource);
 					objectSource.disconnect();
 					
-					if(request instanceof CustomerInfo) {
+					if(request instanceof CustomerInfo && request.getError() == null) {
 						if(((CustomerInfo) request).getCustomer() != null){
 							this.clientEmail = ((CustomerInfo) request).getEmail();
 							this.admin = ((CustomerInfo) request).isAdmin();
