@@ -529,7 +529,7 @@ public class PrcseDataSource extends Observable implements PrcseSource {
 	}
 
 	@Override
-	public ArrayList<HashMap> getEventSeatingMap(long eventId) {
+	public ArrayList<HashMap<Long, SeatingArea>> getEventSeatingMap(long eventId) {
 		// TODO first layer of sql requests for drawn seating areas
 		// get first tier of seating area where event id is eventId
 		// for each result getSeatingAreaMap();

@@ -74,8 +74,10 @@ public class ConnectionHandler extends Observable implements Runnable {
 						}
 					}
 					
-					if((request.shouldBroadcast() || request.shouldSync()) && request.getError() == null){
-						this.notifyRequest(request);
+					if((request.shouldBroadcast() || request.shouldSync())){
+						if(request.getError() == null) {
+							this.notifyRequest(request);
+						}
 					}
 					else {
 						output.writeObject(request);
